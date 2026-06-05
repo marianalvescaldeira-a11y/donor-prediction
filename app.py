@@ -8,7 +8,7 @@ imputer = joblib.load('knn_imputer.joblib')
 
 st.set_page_config(page_title="Donor Predictor", layout="wide")
 
-st.title("Civic Support Alliance: Donor Outreach Interface")
+st.title("Machine Learning Project: Donor Outreach Interface")
 st.write("This tool uses Logistic Regression to predict the probability of a donation.")
 
 col1, col2, col3 = st.columns(3)
@@ -16,7 +16,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.header("Demographics")
     DONOR_AGE = st.number_input("Donor age: ", min_value=18, max_value=100)
-    CHILDREN = st.number_input("Number of children: ", min_value=0, max_value=20, value=0.0)
+    CHILDREN = st.number_input("Number of children: ", min_value=0, max_value=20)
     SES = st.selectbox("Socio-Economic Status (1=Highest, 4=Lowest): ", [1, 2, 3, 4], index=1)
     
     # --- HOME_OWNER MAPPING ---
@@ -60,7 +60,7 @@ with col3:
 st.header("Neighborhood Economic Data")
 n_col1, n_col2, n_col3 = st.columns(3)
 with n_col1:
-    MEDIAN_HOME_VALUE = st.number_input("Individuals’ median home value in hundreds of units: ", min_value=0, value=1500)
+    MEDIAN_HOME_VALUE = st.number_input("Individuals’ median home value in hundreds of units: ", min_value=0)
 with n_col2:
     MEDIAN_HOUSEHOLD_INCOME = st.number_input("Individuals’ median household income in hundreds of units: ", min_value=0)
 with n_col3:
