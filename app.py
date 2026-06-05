@@ -66,7 +66,6 @@ with n_col3:
 
 if st.button("Calculate Donation Probability"):
     
-    
     urb_r_val = 1 if URBANICITY_R == "Yes" else 0
     urb_s_val = 1 if URBANICITY_S == "Yes" else 0
     urb_t_val = 1 if URBANICITY_T == "Yes" else 0
@@ -76,7 +75,6 @@ if st.button("Calculate Donation Probability"):
 
     status_letter = RECENCY_STATUS_96NK[0]
 
-    
     data_dict = {
         'DONOR_AGE': DONOR_AGE,
         'CHILDREN': CHILDREN,
@@ -105,34 +103,42 @@ if st.button("Calculate Donation Probability"):
     
     full_df = pd.DataFrame([data_dict])
     
-    # DYNAMIC SCALER INTERACTION: Query the scaler metadata to see what columns it expects
+   
     if hasattr(scaler, 'feature_names_in_'):
         scaler_features = list(scaler.feature_names_in_)
+       
+        for col in scaler_features:
+            if col not in full_df.columns:
+                full_df[col] = 0
         input_for_scaler = full_df[scaler_features]
         input_scaled = scaler.transform(input_for_scaler)
+        processed_numeric = pd.DataFrame(input_scaled, columns=scaler_features)
     else:
-        
         numeric_cols = ['DONOR_AGE', 'CHILDREN', 'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 
                         'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 
                         'MEDIAN_HOME_VALUE', 'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME']
         input_for_scaler = full_df[numeric_cols]
         input_scaled = scaler.transform(input_for_scaler.values)
-        scaler_features = numeric_cols
+        processed_numeric = pd.DataFrame(input_scaled, columns=numeric_cols)
     
-    input_imputed_scaled = imputer.transform(input_scaled)
-    processed_df = pd.DataFrame(input_imputed_scaled, columns=scaler_features)
+   
+    input_imputed_scaled = imputer.transform(processed_numeric)
+    processed_df = pd.DataFrame(input_imputed_scaled, columns=processed_numeric.columns)
     
-    # Seamlessly re-attach any remaining columns that weren't touched by the scaler
+   
     for col in full_df.columns:
         if col not in processed_df.columns:
             processed_df[col] = full_df[col].values
             
-    # DYNAMIC MODEL INTERACTION: Query the logistic regression model metadata for layout validation
+   
     if hasattr(log_reg, 'feature_names_in_'):
         model_features = list(log_reg.feature_names_in_)
+        
+        for col in model_features:
+            if col not in processed_df.columns:
+                processed_df[col] = 0
         input_final = processed_df[model_features]
     else:
-        # Static baseline configuration order layout protection strategy fallback
         expected_column_order = [
             'DONOR_AGE', 'CHILDREN', 'SES', 'HOME_OWNER_U', 'URBANICITY_R', 'URBANICITY_S', 'URBANICITY_T',
             'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 'PEP_STAR', 'RECENT_STAR_STATUS',
@@ -140,9 +146,12 @@ if st.button("Calculate Donation Probability"):
             'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME', 'RECENCY_STATUS_96NK_A', 'RECENCY_STATUS_96NK_E',
             'RECENCY_STATUS_96NK_F', 'RECENCY_STATUS_96NK_L', 'RECENCY_STATUS_96NK_N', 'RECENCY_STATUS_96NK_S'
         ]
+        for col in expected_column_order:
+            if col not in processed_df.columns:
+                processed_df[col] = 0
         input_final = processed_df[expected_column_order]
     
-    # Calculate live pipeline prediction output probabilities
+    
     proba = log_reg.predict_proba(input_final)[0][1]
     
     st.divider()
