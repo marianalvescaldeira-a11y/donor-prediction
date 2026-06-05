@@ -103,10 +103,9 @@ if st.button("Calculate Donation Probability"):
     
     full_df = pd.DataFrame([data_dict])
     
-   
+    
     if hasattr(scaler, 'feature_names_in_'):
         scaler_features = list(scaler.feature_names_in_)
-       
         for col in scaler_features:
             if col not in full_df.columns:
                 full_df[col] = 0
@@ -121,19 +120,40 @@ if st.button("Calculate Donation Probability"):
         input_scaled = scaler.transform(input_for_scaler.values)
         processed_numeric = pd.DataFrame(input_scaled, columns=numeric_cols)
     
-   
-    input_imputed_scaled = imputer.transform(processed_numeric)
-    processed_df = pd.DataFrame(input_imputed_scaled, columns=processed_numeric.columns)
     
+    base_df = full_df.copy()
+    for col in processed_numeric.columns:
+        base_df[col] = processed_numeric[col].values
+
    
-    for col in full_df.columns:
+    if hasattr(imputer, 'feature_names_in_'):
+        imputer_features = list(imputer.feature_names_in_)
+        for col in imputer_features:
+            if col not in base_df.columns:
+                base_df[col] = 0
+        input_for_imputer = base_df[imputer_features]
+        input_imputed_scaled = imputer.transform(input_for_imputer)
+        processed_df = pd.DataFrame(input_imputed_scaled, columns=imputer_features)
+    else:
+        
+        n_features = imputer.n_features_in_
+        if n_features == processed_numeric.shape[1]:
+            input_imputed_scaled = imputer.transform(processed_numeric.values)
+            processed_df = pd.DataFrame(input_imputed_scaled, columns=processed_numeric.columns)
+        else:
+            for col in base_df.columns:
+                pass
+            input_imputed_scaled = imputer.transform(base_df.values[:, :n_features])
+            processed_df = pd.DataFrame(input_imputed_scaled, columns=base_df.columns[:n_features])
+
+    
+    for col in base_df.columns:
         if col not in processed_df.columns:
-            processed_df[col] = full_df[col].values
+            processed_df[col] = base_df[col].values
             
    
     if hasattr(log_reg, 'feature_names_in_'):
         model_features = list(log_reg.feature_names_in_)
-        
         for col in model_features:
             if col not in processed_df.columns:
                 processed_df[col] = 0
