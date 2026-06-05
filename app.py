@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-
 log_reg = joblib.load('logistic_model.joblib')
 scaler = joblib.load('scaler.joblib')
 imputer = joblib.load('knn_imputer.joblib')
@@ -76,8 +75,6 @@ if st.button("Calculate Donation Probability"):
     urb_t_val = 1 if URBANICITY_T == "Yes" else 0
     home_u_val = 1 if HOME_OWNER_U == "Yes" else 0
     pep_val = 1 if PEP_STAR == "Yes" else 0
-    
-    
     star_status_val = 1 if RECENT_STAR_STATUS == "Yes" else 0
 
     # Extract just the single-letter code ('A', 'E', 'F', etc.) from the donor status string
@@ -100,21 +97,50 @@ if st.button("Calculate Donation Probability"):
         'RECENT_CARD_RESPONSE_PROP': RECENT_CARD_RESPONSE_PROP,
         'MEDIAN_HOME_VALUE': MEDIAN_HOME_VALUE,
         'MEDIAN_HOUSEHOLD_INCOME': MEDIAN_HOUSEHOLD_INCOME,
-        'PER_CAPITA_INCOME': PER_CAPITA_INCOME
+        'PER_CAPITA_INCOME': PER_CAPITA_INCOME,
+        # Missing dummy columns explicitly mapped here:
+        'RECENCY_STATUS_96NK_A': 1 if status_letter == 'A' else 0,
+        'RECENCY_STATUS_96NK_E': 1 if status_letter == 'E' else 0,
+        'RECENCY_STATUS_96NK_F': 1 if status_letter == 'F' else 0,
+        'RECENCY_STATUS_96NK_L': 1 if status_letter == 'L' else 0,
+        'RECENCY_STATUS_96NK_N': 1 if status_letter == 'N' else 0,
+        'RECENCY_STATUS_96NK_S': 1 if status_letter == 'S' else 0
     }
     
     input_df = pd.DataFrame([data_dict])
     
-   
-    input_scaled = scaler.transform(input_df)
+    # 1. Isolate numerical features that belong to 'train_num'
+    numeric_cols = ['DONOR_AGE', 'CHILDREN', 'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 
+                    'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 
+                    'MEDIAN_HOME_VALUE', 'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME']
     
+    input_numeric = input_df[numeric_cols]
     
+    # 2. Scale first, Impute second (matching your Colab pipeline sequence)
+    input_scaled = scaler.transform(input_numeric)
     input_imputed_scaled = imputer.transform(input_scaled)
     
+    # 3. Reconstruct data structures with original column layout
+    input_numeric_processed = pd.DataFrame(input_imputed_scaled, columns=numeric_cols)
     
-    proba = log_reg.predict_proba(input_imputed_scaled)[0][1]
+    # Re-attach categorical columns
+    categorical_cols = [col for col in input_df.columns if col not in numeric_cols]
+    for col in categorical_cols:
+        input_numeric_processed[col] = input_df[col].values
+        
+    # 4. Enforce final column order layout matching model's expected array structure
+    # (If your Colab list order differed, rearrange the items inside this array layout)
+    expected_column_order = [
+        'DONOR_AGE', 'CHILDREN', 'SES', 'HOME_OWNER_U', 'URBANICITY_R', 'URBANICITY_S', 'URBANICITY_T',
+        'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 'PEP_STAR', 'RECENT_STAR_STATUS',
+        'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 'MEDIAN_HOME_VALUE',
+        'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME', 'RECENCY_STATUS_96NK_A', 'RECENCY_STATUS_96NK_E',
+        'RECENCY_STATUS_96NK_F', 'RECENCY_STATUS_96NK_L', 'RECENCY_STATUS_96NK_N', 'RECENCY_STATUS_96NK_S'
+    ]
+    input_final = input_numeric_processed[expected_column_order]
     
-    proba = 0.11 #just a random percentage
+    # 5. Execute core prediction call
+    proba = log_reg.predict_proba(input_final)[0][1]
     
     st.divider()
     if proba > 0.45: # since we are dealing with donor/non donors, it's preferable to contact more potencial donors
