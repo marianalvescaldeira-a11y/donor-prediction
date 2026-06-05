@@ -16,10 +16,9 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.header("Demographics")
     DONOR_AGE = st.number_input("Donor age: ", min_value=18, max_value=100)
-    CHILDREN = st.number_input("Number of children: ", min_value=0, max_value=20)
+    CHILDREN = st.number_input("Number of children: ", min_value=0, max_value=20, value=0)
     SES = st.selectbox("Socio-Economic Status (1=Highest, 4=Lowest): ", [1, 2, 3, 4], index=1)
     
-    # --- HOME_OWNER MAPPING ---
     HOME_OWNER_U = st.selectbox(
         "Is the individual a homeowner? ", 
         ["Yes", "No"],
@@ -38,7 +37,6 @@ with col2:
     LAST_GIFT_AMT = st.number_input("Amount donated in the individuals most recent donation: ", min_value=0.0)
     FILE_CARD_GIFT = st.number_input("Lifetime average donation from card solicitations: ", min_value=0.0)
     
-    # to selectbox works correctly
     RECENCY_STATUS_96NK = st.selectbox("Donor status:", [
         "A (active - made first donation 12+ months ago, and donated in last 12 months)", 
         "E (inactive - made a donation 25+ months ago)", 
@@ -60,7 +58,7 @@ with col3:
 st.header("Neighborhood Economic Data")
 n_col1, n_col2, n_col3 = st.columns(3)
 with n_col1:
-    MEDIAN_HOME_VALUE = st.number_input("Individuals’ median home value in hundreds of units: ", min_value=0)
+    MEDIAN_HOME_VALUE = st.number_input("Individuals’ median home value in hundreds of units of euros: ", min_value=0, value=1500)
 with n_col2:
     MEDIAN_HOUSEHOLD_INCOME = st.number_input("Individuals’ median household income in hundreds of units: ", min_value=0)
 with n_col3:
@@ -68,8 +66,7 @@ with n_col3:
 
 if st.button("Calculate Donation Probability"):
     
-    # --- INTEGRATED MAPPING LOGIC ---
-    # Convert 'Yes'/'No' string drops to binary 1s and 0s
+    
     urb_r_val = 1 if URBANICITY_R == "Yes" else 0
     urb_s_val = 1 if URBANICITY_S == "Yes" else 0
     urb_t_val = 1 if URBANICITY_T == "Yes" else 0
@@ -77,9 +74,9 @@ if st.button("Calculate Donation Probability"):
     pep_val = 1 if PEP_STAR == "Yes" else 0
     star_status_val = 1 if RECENT_STAR_STATUS == "Yes" else 0
 
-    # Extract just the single-letter code ('A', 'E', 'F', etc.) from the donor status string
     status_letter = RECENCY_STATUS_96NK[0]
 
+    
     data_dict = {
         'DONOR_AGE': DONOR_AGE,
         'CHILDREN': CHILDREN,
@@ -98,7 +95,6 @@ if st.button("Calculate Donation Probability"):
         'MEDIAN_HOME_VALUE': MEDIAN_HOME_VALUE,
         'MEDIAN_HOUSEHOLD_INCOME': MEDIAN_HOUSEHOLD_INCOME,
         'PER_CAPITA_INCOME': PER_CAPITA_INCOME,
-        # Missing dummy columns explicitly mapped here:
         'RECENCY_STATUS_96NK_A': 1 if status_letter == 'A' else 0,
         'RECENCY_STATUS_96NK_E': 1 if status_letter == 'E' else 0,
         'RECENCY_STATUS_96NK_F': 1 if status_letter == 'F' else 0,
@@ -107,43 +103,50 @@ if st.button("Calculate Donation Probability"):
         'RECENCY_STATUS_96NK_S': 1 if status_letter == 'S' else 0
     }
     
-    input_df = pd.DataFrame([data_dict])
+    full_df = pd.DataFrame([data_dict])
     
-    # 1. Isolate numerical features that belong to 'train_num'
-    numeric_cols = ['DONOR_AGE', 'CHILDREN', 'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 
-                    'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 
-                    'MEDIAN_HOME_VALUE', 'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME']
-    
-    input_numeric = input_df[numeric_cols]
-    
-    # 2. Scale first, Impute second (matching your Colab pipeline sequence)
-    input_scaled = scaler.transform(input_numeric)
-    input_imputed_scaled = imputer.transform(input_scaled)
-    
-    # 3. Reconstruct data structures with original column layout
-    input_numeric_processed = pd.DataFrame(input_imputed_scaled, columns=numeric_cols)
-    
-    # Re-attach categorical columns
-    categorical_cols = [col for col in input_df.columns if col not in numeric_cols]
-    for col in categorical_cols:
-        input_numeric_processed[col] = input_df[col].values
+    # DYNAMIC SCALER INTERACTION: Query the scaler metadata to see what columns it expects
+    if hasattr(scaler, 'feature_names_in_'):
+        scaler_features = list(scaler.feature_names_in_)
+        input_for_scaler = full_df[scaler_features]
+        input_scaled = scaler.transform(input_for_scaler)
+    else:
         
-    # 4. Enforce final column order layout matching model's expected array structure
-    # (If your Colab list order differed, rearrange the items inside this array layout)
-    expected_column_order = [
-        'DONOR_AGE', 'CHILDREN', 'SES', 'HOME_OWNER_U', 'URBANICITY_R', 'URBANICITY_S', 'URBANICITY_T',
-        'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 'PEP_STAR', 'RECENT_STAR_STATUS',
-        'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 'MEDIAN_HOME_VALUE',
-        'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME', 'RECENCY_STATUS_96NK_A', 'RECENCY_STATUS_96NK_E',
-        'RECENCY_STATUS_96NK_F', 'RECENCY_STATUS_96NK_L', 'RECENCY_STATUS_96NK_N', 'RECENCY_STATUS_96NK_S'
-    ]
-    input_final = input_numeric_processed[expected_column_order]
+        numeric_cols = ['DONOR_AGE', 'CHILDREN', 'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 
+                        'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 
+                        'MEDIAN_HOME_VALUE', 'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME']
+        input_for_scaler = full_df[numeric_cols]
+        input_scaled = scaler.transform(input_for_scaler.values)
+        scaler_features = numeric_cols
     
-    # 5. Execute core prediction call
+    input_imputed_scaled = imputer.transform(input_scaled)
+    processed_df = pd.DataFrame(input_imputed_scaled, columns=scaler_features)
+    
+    # Seamlessly re-attach any remaining columns that weren't touched by the scaler
+    for col in full_df.columns:
+        if col not in processed_df.columns:
+            processed_df[col] = full_df[col].values
+            
+    # DYNAMIC MODEL INTERACTION: Query the logistic regression model metadata for layout validation
+    if hasattr(log_reg, 'feature_names_in_'):
+        model_features = list(log_reg.feature_names_in_)
+        input_final = processed_df[model_features]
+    else:
+        # Static baseline configuration order layout protection strategy fallback
+        expected_column_order = [
+            'DONOR_AGE', 'CHILDREN', 'SES', 'HOME_OWNER_U', 'URBANICITY_R', 'URBANICITY_S', 'URBANICITY_T',
+            'LAST_GIFT_AMT', 'FILE_CARD_GIFT', 'DONOR_VELOCITY', 'PEP_STAR', 'RECENT_STAR_STATUS',
+            'RECENT_CARD_RESPONSE_COUNT', 'RECENT_CARD_RESPONSE_PROP', 'MEDIAN_HOME_VALUE',
+            'MEDIAN_HOUSEHOLD_INCOME', 'PER_CAPITA_INCOME', 'RECENCY_STATUS_96NK_A', 'RECENCY_STATUS_96NK_E',
+            'RECENCY_STATUS_96NK_F', 'RECENCY_STATUS_96NK_L', 'RECENCY_STATUS_96NK_N', 'RECENCY_STATUS_96NK_S'
+        ]
+        input_final = processed_df[expected_column_order]
+    
+    # Calculate live pipeline prediction output probabilities
     proba = log_reg.predict_proba(input_final)[0][1]
     
     st.divider()
-    if proba > 0.45: # since we are dealing with donor/non donors, it's preferable to contact more potencial donors
+    if proba > 0.45: #since we are dealing with donor/non donors, it's preferable to contact more potencial donors
         st.success(f"### Recommendation: CONTACT")
         st.write(f"The model predicts a **{proba:.1%}** chance of a donation.")
     else:
